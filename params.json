@@ -1,0 +1,6 @@
+{
+  "name": "Madelineproto",
+  "tagline": "PHP implementation of mtproto, created form telepy using py2php. WIP.",
+  "body": "# MadelineProto\r\n\r\nPHP implementation of MTProto, converted from [telepy](https://github.com/griganton/telepy) using [py2php](https://github.com/dan-da/py2php).  \r\n\r\nThis is a WIP.\r\n\r\nThis project requires PHP 7. It might not work on big endian machines.\r\n\r\nThe name of this project is inspired by [this person](https://s-media-cache-ak0.pinimg.com/736x/f0/a1/70/f0a170718baeb0e3817c612d96f5d1cf.jpg).\r\n",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}
