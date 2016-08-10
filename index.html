@@ -22,13 +22,28 @@
       <h1>
 <a id="madelineproto" class="anchor" href="#madelineproto" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>MadelineProto</h1>
 
-<p><a href="https://styleci.io/repos/61838413"><img src="https://styleci.io/repos/61838413/shield" alt="StyleCI"></a></p>
+<p><a href="https://styleci.io/repos/61838413"><img src="https://styleci.io/repos/61838413/shield" alt="StyleCI"></a>
+<a href="https://travis-ci.org/danog/MadelineProto"><img src="https://travis-ci.org/danog/MadelineProto.svg?branch=master" alt="Build Status"></a>  </p>
 
-<p>PHP implementation of MTProto, converted from <a href="https://github.com/griganton/telepy">telepy</a> using <a href="https://github.com/dan-da/py2php">py2php</a>.  </p>
+<p>Licensed under AGPLv3.</p>
 
-<p>This is a WIP.</p>
+<p>PHP implementation of MTProto, based on <a href="https://github.com/griganton/telepy_old">telepy</a>.</p>
 
-<p>This project requires PHP 7. </p>
+<p>This is a WIP.
+Here all of the things that still have to be done in this library.<br>
+You can (and you are also encouraged to) contribute by completing any of the following points.<br>
+The importance of each item will range from 1 to 5. It's better to start from the most important items.</p>
+
+<ul>
+<li>In Session.php, complete the function that creates the authorization key, in particular try to figure out what's wrong with the req_DH_params query (5).</li>
+<li>In Crypto.php or aes256.php, choose which of the ige implementation to use and complete it (4).</li>
+<li>In Session.php and TL, manage rpc errors, notifications, error codes and basically everything that isn't a normal response (4).</li>
+<li>In Connection.php and Session.php, add support for http, https and (maybe) udp connections and fix tcp intermediate connections (3).</li>
+<li>In API.php, complete a decent authorization flow that supports both bots and normal users (2).</li>
+<li>In PrimeModule.php, fix the mess in it, choose one of (the fastest) native php prime factorization function and implement it without biginteger (1.5).</li>
+</ul>
+
+<p>This project requires PHP 7 and a 64 bit machine. </p>
 
 <p>The name of this project is inspired by <a href="https://s-media-cache-ak0.pinimg.com/736x/f0/a1/70/f0a170718baeb0e3817c612d96f5d1cf.jpg">this person</a>.</p>
 
