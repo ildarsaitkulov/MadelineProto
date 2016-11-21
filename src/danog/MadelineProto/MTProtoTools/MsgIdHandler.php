@@ -6,7 +6,7 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 MadelineProto is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -19,10 +19,10 @@ class MsgIdHandler extends MessageHandler
 {
     public function check_message_id($new_message_id, $outgoing, $container = false)
     {
-        if (((int) ((time() + $this->connection->get_time_delta() - 300) * pow(2, 30)) * 4) > $new_message_id) {
+        if (((int) ((time() + $this->datacenter->time_delta - 300) * pow(2, 30)) * 4) > $new_message_id) {
             throw new Exception('Given message id ('.$new_message_id.') is too old.');
         }
-        if (((int) ((time() + $this->connection->get_time_delta() + 30) * pow(2, 30)) * 4) < $new_message_id) {
+        if (((int) ((time() + $this->datacenter->time_delta + 30) * pow(2, 30)) * 4) < $new_message_id) {
             throw new Exception('Given message id ('.$new_message_id.') is too new.');
         }
         if ($outgoing) {
@@ -66,12 +66,15 @@ class MsgIdHandler extends MessageHandler
 
     public function generate_message_id()
     {
-        $int_message_id = (int) ((time() + $this->connection->get_time_delta()) << 32);
-/*        $int_message_id = (int) (
+        $int_message_id = (int) ((time() + $this->datacenter->time_delta) << 32);
+        /*
+        $int_message_id = (int) (
             ((int) ($ms_time / 1000) << 32) |
             ($this->posmod($ms_time, 1000) << 22) |
             rand(0, 524288) << 2
-        );*/
+        );
+        */
+
         $keys = array_keys($this->outgoing_messages);
         asort($keys);
         $keys = end($keys);

@@ -6,7 +6,7 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 MadelineProto is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -24,10 +24,7 @@ class MTProto extends MTProtoTools
         // Set default settings
         $default_settings = [
             'authorization' => [
-                'auth_key'                         => null,
-                'temp_auth_key'                    => null,
                 'default_temp_auth_key_expires_in' => 86400,
-                'session_id'                       => \phpseclib\Crypt\Random::string(8),
                 'rsa_key'                          => '-----BEGIN RSA PUBLIC KEY-----
 MIIBCgKCAQEAwVACPi9w23mF3tBkdZz+zwrzKOaaQdr01vAbU4E1pvkfj4sqDsm6
 lyDONS789sVoD/xCS9Y0hkkC3gtL1tSfTlgCMOOul9lcixlEKzwKENj1Yz/s7daS
@@ -61,7 +58,7 @@ Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB
             'connection_settings' => [
                 'all' => [
                     'protocol'  => 'tcp_full',
-                    'test_mode' => true,
+                    'test_mode' => false,
                     'port'      => '443',
                 ],
                 'default_dc' => 2,
@@ -77,14 +74,14 @@ Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB
             'tl_schema'     => [
                 'layer'         => 55,
                 'src'           => [
-                    __DIR__.'/TL_mtproto_v1.json',
-                    __DIR__.'/TL_telegram_v55.json',
+                    'mtproto'  => __DIR__.'/TL_mtproto_v1.json',
+                    'telegram' => __DIR__.'/TL_telegram_v55.json',
                 ],
             ],
-            'logging'       => [
-                'logging'       => 1,
-                'logging_param' => '/tmp/MadelineProto.log',
-                'logging'       => 3,
+            'logger'       => [
+                'logger'       => 1,
+                'logger_param' => '/tmp/MadelineProto.log',
+                'logger'       => 3,
             ],
             'max_tries'         => [
                 'query'         => 5,
@@ -107,43 +104,68 @@ Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB
             }
         }
         $this->settings = $settings;
-        // Set up logging class
-        \danog\MadelineProto\Logging::constructor($this->settings['logging']['logging'], $this->settings['logging']['logging_param']);
+
+        // Setup logger
+        $this->setup_logger();
 
         // Connect to servers
-        \danog\MadelineProto\Logging::log('Connecting to server...');
-        $this->connection = new DataCenter($this->settings['connection'], $this->settings['connection_settings']);
+        \danog\MadelineProto\Logger::log('Istantiating DataCenter...');
+        $this->datacenter = new DataCenter($this->settings['connection'], $this->settings['connection_settings']);
 
         // Load rsa key
-        \danog\MadelineProto\Logging::log('Loading RSA key...');
+        \danog\MadelineProto\Logger::log('Loading RSA key...');
         $this->key = new RSA($settings['authorization']['rsa_key']);
 
         // Istantiate TL class
-        \danog\MadelineProto\Logging::log('Translating tl schemas...');
+        \danog\MadelineProto\Logger::log('Translating tl schemas...');
         $this->tl = new TL\TL($this->settings['tl_schema']['src']);
 
-        $this->seq_no = 0;
         $this->incoming_messages = [];
         $this->outgoing_messages = [];
         $this->future_salts = [];
 
-        if ($this->settings['authorization']['temp_auth_key'] == null || $this->settings['authorization']['auth_key'] == null) {
-            if ($this->settings['authorization']['auth_key'] == null) {
-                \danog\MadelineProto\Logging::log('Generating permanent authorization key...');
-                $this->settings['authorization']['auth_key'] = $this->create_auth_key(-1);
-            }
-            \danog\MadelineProto\Logging::log('Generating temporary authorization key...');
-            $this->settings['authorization']['temp_auth_key'] = $this->create_auth_key($this->settings['authorization']['default_temp_auth_key_expires_in']);
-        }
-        $this->write_client_info();
-        $this->bind_temp_auth_key($this->settings['authorization']['default_temp_auth_key_expires_in']);
-        \danog\MadelineProto\Logging::log('You may now login to Telegram.');
+        $this->switch_dc($this->settings['connection_settings']['default_dc'], true);
     }
 
-    public function write_client_info()
+    public function setup_logger()
     {
-        \danog\MadelineProto\Logging::log('Writing client info...');
-        $nearestDc = $this->method_call(
+        if (!\danog\MadelineProto\Logger::$constructed) {
+            // Set up logger class
+            \danog\MadelineProto\Logger::constructor($this->settings['logger']['logger'], $this->settings['logger']['logger_param']);
+        }
+    }
+
+    // Switches to a new datacenter and if necessary creates authorization keys, binds them and writes client info
+    public function switch_dc($new_dc, $allow_nearest_dc_switch = false)
+    {
+        \danog\MadelineProto\Logger::log('Switching to DC '.$new_dc.'...');
+        if ($this->datacenter->dc_connect($new_dc)) {
+            $this->init_authorization();
+            $this->bind_temp_auth_key($this->settings['authorization']['default_temp_auth_key_expires_in']);
+            $this->write_client_info($allow_nearest_dc_switch);
+        }
+    }
+
+    // Creates authorization keys
+    public function init_authorization()
+    {
+        if ($this->datacenter->session_id == null) {
+            $this->datacenter->session_id = \phpseclib\Crypt\Random::string(8);
+        }
+        if ($this->datacenter->temp_auth_key == null || $this->datacenter->auth_key == null) {
+            if ($this->datacenter->auth_key == null) {
+                \danog\MadelineProto\Logger::log('Generating permanent authorization key...');
+                $this->datacenter->auth_key = $this->create_auth_key(-1);
+            }
+            \danog\MadelineProto\Logger::log('Generating temporary authorization key...');
+            $this->datacenter->temp_auth_key = $this->create_auth_key($this->settings['authorization']['default_temp_auth_key_expires_in']);
+        }
+    }
+
+    public function write_client_info($allow_switch)
+    {
+        \danog\MadelineProto\Logger::log('Writing client info...');
+        $nearest_dc = $this->method_call(
             'invokeWithLayer',
             [
                 'layer' => $this->settings['tl_schema']['layer'],
@@ -155,17 +177,11 @@ Slv8kg9qv1m6XHVQY3PnEw+QQtqSIXklHwIDAQAB
                 ),
             ]
         );
-        \danog\MadelineProto\Logging::log('Current dc is '.$nearestDc['this_dc'].', nearest dc is '.$nearestDc['nearest_dc'].' in '.$nearestDc['country'].'.');
+        \danog\MadelineProto\Logger::log('Current dc is '.$nearest_dc['this_dc'].', nearest dc is '.$nearest_dc['nearest_dc'].' in '.$nearest_dc['country'].'.');
 
-        if ($nearestDc['nearest_dc'] != $nearestDc['this_dc']) {
-            \danog\MadelineProto\Logging::log('Switching to dc '.$nearestDc['nearest_dc'].'...');
-            $this->connection->dc_connect($nearestDc['nearest_dc']);
-            $this->settings['connection_settings']['default_dc'] = $nearestDc['nearest_dc'];
+        if ($nearest_dc['nearest_dc'] != $nearest_dc['this_dc'] && $allow_switch) {
+            $this->switch_dc($nearest_dc['nearest_dc']);
+            $this->settings['connection_settings']['default_dc'] = $nearest_dc['nearest_dc'];
         }
-    }
-
-    public function __destruct()
-    {
-        unset($this->sock);
     }
 }

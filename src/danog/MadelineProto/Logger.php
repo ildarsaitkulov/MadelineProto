@@ -6,16 +6,16 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 MadelineProto is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 /*
- * Logging class
+ * Logger class
  */
 
 namespace danog\MadelineProto;
 
-class Logging
+class Logger
 {
     public static $mode = null;
     public static $optional = null;
@@ -23,9 +23,9 @@ class Logging
 
     /*
      * Constructor function
-     * Accepts various logging modes:
-     * 0 - No logging
-     * 1 - Log to the default logging destination
+     * Accepts various logger modes:
+     * 0 - No logger
+     * 1 - Log to the default logger destination
      * 2 - Log to file defined in second parameter
      * 3 - Echo logs
      */

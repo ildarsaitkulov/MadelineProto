@@ -6,7 +6,7 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 MadelineProto is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -16,104 +16,92 @@ class TL extends \danog\MadelineProto\Tools
 {
     public function __construct($filename)
     {
-        if (is_array($filename)) {
-            $TL_dict = ['constructors' => [], 'methods' => []];
-            foreach ($filename as $file) {
-                $TL_dict['constructors'] = array_merge(json_decode(file_get_contents($file), true)['constructors'], $TL_dict['constructors']);
-                $TL_dict['methods'] = array_merge(json_decode(file_get_contents($file), true)['methods'], $TL_dict['methods']);
-            }
-        } else {
+        \danog\MadelineProto\Logger::log('Loading TL schemes...');
+        $this->constructors = new \danog\MadelineProto\TL\TLConstructor();
+        $this->methods = new \danog\MadelineProto\TL\TLMethod();
+        foreach ($filename as $type => $file) {
+            $type = $type === 'mtproto';
             $TL_dict = json_decode(file_get_contents($file), true);
-        }
-        $this->constructors = $TL_dict['constructors'];
-        $this->constructor_id = [];
-        $this->constructor_type = [];
-        foreach ($this->constructors as $elem) {
-            $z = new TLConstructor($elem);
-            $this->constructor_id[$z->id] = $z;
-            $this->constructor_type[$z->predicate] = $z;
-        }
-        $this->methods = $TL_dict['methods'];
-        $this->method_id = [];
-        $this->method_name = [];
-        foreach ($this->methods as $elem) {
-            $z = new TLMethod($elem);
-            $this->method_id[$z->id] = $z;
-            $this->method_name[$z->method] = $z;
+
+            \danog\MadelineProto\Logger::log('Translating objects...');
+            foreach ($TL_dict['constructors'] as $elem) {
+                $this->constructors->add($elem, $type);
+            }
+
+            \danog\MadelineProto\Logger::log('Translating methods...');
+            foreach ($TL_dict['methods'] as $elem) {
+                $this->methods->add($elem);
+            }
         }
     }
 
-    public function serialize_obj($type_, $kwargs)
+    public function get_named_method_args($method, $arguments)
     {
-        $bytes_io = '';
-        if (isset($this->constructor_type[$type_])) {
-            $tl_constructor = $this->constructor_type[$type_];
-        } else {
-            throw new Exception('Could not extract type: '.$type_);
-        }
-        $bytes_io .= \danog\PHP\Struct::pack('<i', $tl_constructor->id);
-        foreach ($tl_constructor->params as $arg) {
-            $bytes_io .= $this->serialize_param($arg['type'], $arg['subtype'], $kwargs[$arg['name']]);
+        $tl_method = $this->methods->find_by_method($method);
+        if ($tl_method === false) {
+            throw new Exception('Could not extract type: '.$method);
         }
 
-        return $bytes_io;
-    }
-
-    public function get_named_method_args($type_, $kwargs)
-    {
-        if (isset($this->method_name[$type_])) {
-            $tl_method = $this->method_name[$type_];
-        } else {
-            throw new Exception('Could not extract type: '.$type_);
-        }
-
-        if (count(array_filter(array_keys($kwargs), 'is_string')) == 0) {
+        if (count(array_filter(array_keys($arguments), 'is_string')) == 0) {
             $argcount = 0;
             $newargs = [];
-            foreach ($tl_method->params as $arg) {
-                $newargs[$arg['name']] = $kwargs[$argcount++];
+            foreach ($tl_method['params'] as $current_argument) {
+                $newargs[$current_argument['name']] = $arguments[$argcount++];
             }
-            $kwargs = $newargs;
+            $arguments = $newargs;
         }
 
-        return $kwargs;
+        return $arguments;
     }
 
-    public function serialize_method($type_, $kwargs)
+    public function serialize_obj($object, $arguments)
     {
-        $bytes_io = '';
-        if (isset($this->method_name[$type_])) {
-            $tl_method = $this->method_name[$type_];
-        } else {
-            throw new Exception('Could not extract type: '.$type_);
+        $tl_constructor = $this->constructors->find_by_predicate($object);
+        if ($tl_constructor === false) {
+            throw new Exception('Could not extract type: '.$object);
         }
-        $bytes_io .= \danog\PHP\Struct::pack('<i', $tl_method->id);
-        foreach ($tl_method->params as $arg) {
-            if (!isset($kwargs[$arg['name']])) {
-                if ($arg['name'] == 'flags') {
-                    $kwargs['flags'] = 0;
+
+        $serialized = \danog\PHP\Struct::pack('<i', $tl_constructor['id']);
+
+        foreach ($tl_constructor['params'] as $current_argument) {
+            $serialized .= $this->serialize_param($current_argument['type'], $current_argument['subtype'], $arguments[$current_argument['name']]);
+        }
+
+        return $serialized;
+    }
+
+    public function serialize_method($method, $arguments)
+    {
+        $tl_method = $this->methods->find_by_method($method);
+        if ($tl_method === false) {
+            throw new Exception('Could not extract type: '.$method);
+        }
+
+        $serialized = \danog\PHP\Struct::pack('<i', $tl_method['id']);
+
+        foreach ($tl_method['params'] as $current_argument) {
+            if (!isset($arguments[$current_argument['name']])) {
+                if ($current_argument['name'] == 'flags') {
+                    $arguments['flags'] = 0;
                 } else {
-                    if ($arg['opt']) {
+                    if ($current_argument['opt']) {
                         continue;
                     }
-                    throw new Exception('Missing required parameter ('.$arg['name'].')');
+                    throw new Exception('Missing required parameter ('.$current_argument['name'].')');
                 }
             }
-            $bytes_io .= $this->serialize_param($arg['type'], $arg['subtype'], $kwargs[$arg['name']]);
+            $serialized .= $this->serialize_param($current_argument['type'], $current_argument['subtype'], $arguments[$current_argument['name']]);
         }
 
-        return $bytes_io;
+        return $serialized;
     }
 
-    public function serialize_param($type_, $subtype, $value)
+    public function serialize_param($type, $subtype, $value)
     {
-        switch ($type_) {
+        switch ($type) {
             case 'int':
                 if (!is_numeric($value)) {
                     throw new Exception("serialize_param: given value isn't numeric");
-                }
-                if (!(strlen(decbin($value)) <= 32)) {
-                    throw new Exception('Given value is too long.');
                 }
 
                 return \danog\PHP\Struct::pack('<i', $value);
@@ -121,9 +109,6 @@ class TL extends \danog\MadelineProto\Tools
             case '#':
                 if (!is_numeric($value)) {
                     throw new Exception("serialize_param: given value isn't numeric");
-                }
-                if (!(strlen(decbin($value)) <= 32)) {
-                    throw new Exception('Given value is too long.');
                 }
 
                 return \danog\PHP\Struct::pack('<I', $value);
@@ -137,11 +122,7 @@ class TL extends \danog\MadelineProto\Tools
                 break;
             case 'int128':
             case 'int256':
-                if (!is_string($value)) {
-                    throw new Exception("serialize_param: given value isn't a string");
-                }
-
-                return $value;
+                return (string) $value;
                 break;
             case 'double':
                 return \danog\PHP\Struct::pack('<d', $value);
@@ -166,7 +147,7 @@ class TL extends \danog\MadelineProto\Tools
             case '!X':
                 return $value;
             case 'Vector t':
-                $concat = \danog\PHP\Struct::pack('<i', $this->constructor_type['vector']->id);
+                $concat = \danog\PHP\Struct::pack('<i', $this->constructors->find_by_predicate('vector')['id']);
 
                 $concat .= \danog\PHP\Struct::pack('<l', count($value));
                 foreach ($value as $curv) {
@@ -175,14 +156,14 @@ class TL extends \danog\MadelineProto\Tools
 
                 return $concat;
             default:
-                throw new Exception("Couldn't serialize param with type ".$type_);
+                throw new Exception("Couldn't serialize param with type ".$type);
                 break;
         }
     }
 
-    public function get_length($bytes_io, $type_ = null, $subtype = null)
+    public function get_length($bytes_io, $type = null, $subtype = null)
     {
-        $this->deserialize($bytes_io, $type_, $subtype);
+        $this->deserialize($bytes_io, $type, $subtype);
 
         return ftell($bytes_io);
     }
@@ -190,12 +171,13 @@ class TL extends \danog\MadelineProto\Tools
     /**
      * :type bytes_io: io.BytesIO object.
      */
-    public function deserialize($bytes_io, $type_ = null, $subtype = null)
+    public function deserialize($bytes_io, $type = null, $subtype = null)
     {
         if (!(get_resource_type($bytes_io) == 'file' || get_resource_type($bytes_io) == 'stream')) {
-            throw new Exception('An invalid bytes_io handle provided.');
+            throw new Exception('An invalid bytes_io handle was provided.');
         }
-        switch ($type_) {
+        \danog\MadelineProto\Logger::log('Extracting '.$type.'/'.$subtype.' at byte '.ftell($bytes_io));
+        switch ($type) {
             case 'int':
                 $x = \danog\PHP\Struct::unpack('<i', fread($bytes_io, 4)) [0];
                 break;
@@ -240,33 +222,30 @@ class TL extends \danog\MadelineProto\Tools
                 break;
             case 'vector':
                 if ($subtype == null) {
-                    throw new Exception("deserialize: subtype isn't null");
+                    throw new Exception('deserialize: subtype is null');
                 }
                 $count = \danog\PHP\Struct::unpack('<l', fread($bytes_io, 4)) [0];
                 $x = [];
-                foreach ($this->range($count) as $i) {
+                for ($i = 0; $i < $count; $i++) {
                     $x[] = $this->deserialize($bytes_io, $subtype);
                 }
                 break;
             default:
-                if (isset($this->constructor_type[$type_])) {
-                    $tl_elem = $this->constructor_type[$type_];
-                } else {
-                    $Idata = fread($bytes_io, 4);
-                    $i = \danog\PHP\Struct::unpack('<i', $Idata) [0];
-                    if (isset($this->constructor_id[$i])) {
-                        $tl_elem = $this->constructor_id[$i];
-                    } else {
-                        throw new Exception('Could not extract type: '.$type_);
+                $tl_elem = $this->constructors->find_by_predicate($type);
+                if ($tl_elem === false) {
+                    $id = \danog\PHP\Struct::unpack('<i', fread($bytes_io, 4)) [0];
+                    $tl_elem = $this->constructors->find_by_id($id);
+                    if ($tl_elem === false) {
+                        throw new Exception('Could not extract type: '.$type.' with id '.$id);
                     }
                 }
 
                 $base_boxed_types = ['Vector t', 'Int', 'Long', 'Double', 'String', 'Int128', 'Int256'];
-                if (in_array($tl_elem->type, $base_boxed_types)) {
-                    $x = $this->deserialize($bytes_io, $tl_elem->predicate, $subtype);
+                if (in_array($tl_elem['type'], $base_boxed_types)) {
+                    $x = $this->deserialize($bytes_io, $tl_elem['predicate'], $subtype);
                 } else {
-                    $x = ['_' => $tl_elem->predicate];
-                    foreach ($tl_elem->params as $arg) {
+                    $x = ['_' => $tl_elem['predicate']];
+                    foreach ($tl_elem['params'] as $arg) {
                         $x[$arg['name']] = $this->deserialize($bytes_io, $arg['type'], $arg['subtype']);
                     }
                 }
@@ -278,37 +257,40 @@ class TL extends \danog\MadelineProto\Tools
 
     public function content_related($method)
     {
-        return !in_array($method, [
-            'rpc_result',
-            'rpc_error',
-            'rpc_drop_answer',
-            'rpc_answer_unknown',
-            'rpc_answer_dropped_running',
-            'rpc_answer_dropped',
-            'get_future_salts',
-            'future_salt',
-            'future_salts',
-            'ping',
-            'pong',
-            'ping_delay_disconnect',
-            'destroy_session',
-            'destroy_session_ok',
-            'destroy_session_none',
-            'new_session_created',
-            'msg_container',
-            'msg_copy',
-            'gzip_packed',
-            'http_wait',
-            'msgs_ack',
-            'bad_msg_notification',
-            'bad_server_salt',
-            'msgs_state_req',
-            'msgs_state_info',
-            'msgs_all_info',
-            'msg_detailed_info',
-            'msg_new_detailed_info',
-            'msg_resend_req',
-            'msg_resend_ans_req',
-        ]);
+        return !in_array(
+            $method,
+            [
+                'rpc_result',
+                'rpc_error',
+                'rpc_drop_answer',
+                'rpc_answer_unknown',
+                'rpc_answer_dropped_running',
+                'rpc_answer_dropped',
+                'get_future_salts',
+                'future_salt',
+                'future_salts',
+                'ping',
+                'pong',
+                'ping_delay_disconnect',
+                'destroy_session',
+                'destroy_session_ok',
+                'destroy_session_none',
+                'new_session_created',
+                'msg_container',
+                'msg_copy',
+                'gzip_packed',
+                'http_wait',
+                'msgs_ack',
+                'bad_msg_notification',
+                'bad_server_salt',
+                'msgs_state_req',
+                'msgs_state_info',
+                'msgs_all_info',
+                'msg_detailed_info',
+                'msg_new_detailed_info',
+                'msg_resend_req',
+                'msg_resend_ans_req',
+            ]
+        );
     }
 }

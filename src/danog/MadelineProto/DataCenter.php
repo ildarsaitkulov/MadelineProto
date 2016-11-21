@@ -6,7 +6,7 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 MadelineProto is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -17,6 +17,9 @@ namespace danog\MadelineProto;
  */
 class DataCenter extends Tools
 {
+    public $referenced_variables = ['time_delta', 'temp_auth_key', 'auth_key', 'session_id', 'seq_no'];
+    public $sockets;
+
     public function __construct($dclist, $settings)
     {
         $this->dclist = $dclist;
@@ -36,24 +39,28 @@ class DataCenter extends Tools
                 ];
             }
         }
-        $this->dc_connect($settings['default_dc']);
     }
 
     public function dc_disconnect($dc_number)
     {
+        if ($this->curdc == $dc_number) {
+            $this->unset_curdc();
+        }
         if (isset($this->sockets[$dc_number])) {
-            \danog\MadelineProto\Logging::log('Disconnecting from DC '.$dc_number.'...');
+            \danog\MadelineProto\Logger::log('Disconnecting from DC '.$dc_number.'...');
             unset($this->sockets[$dc_number]);
-            unset($this->curdc);
         }
     }
 
     public function dc_connect($dc_number, $settings = [])
     {
         if (isset($this->sockets[$dc_number])) {
-            return;
+            return false;
+            $this->set_curdc($dc_number);
         }
-        \danog\MadelineProto\Logging::log('Connecting to DC '.$dc_number.'...');
+        $this->set_curdc($dc_number);
+
+        \danog\MadelineProto\Logger::log('Connecting to DC '.$dc_number.'...');
 
         if ($settings == []) {
             $settings = $this->settings[$dc_number];
@@ -65,47 +72,34 @@ class DataCenter extends Tools
             $address = 'https://'.$subdomain.'.web.telegram.org/'.$path;
         }
         $this->sockets[$dc_number] = new Connection($address, $settings['port'], $settings['protocol']);
+
+        return true;
+    }
+
+    public function set_curdc($dc_number)
+    {
         $this->curdc = $dc_number;
+        foreach ($this->referenced_variables as $key) {
+            $this->{$key} = &$this->sockets[$dc_number]->{$key};
+        }
     }
 
-    public function set_time_delta($delta, $dc_number = -1)
+    public function unset_curdc($dc_number)
     {
-        if ($dc_number == -1) {
-            $dc_number = $this->curdc;
+        unset($this->curdc);
+        foreach ($this->referenced_variables as $key) {
+            unset($this->sockets[$dc_number]->{$key});
         }
-
-        return $this->sockets[$dc_number]->set_time_delta($delta);
     }
 
-    public function get_time_delta($dc_number = -1)
+    public function __call($name, $arguments)
     {
-        if ($dc_number == -1) {
-            $dc_number = $this->curdc;
-        }
-
-        return $this->sockets[$dc_number]->get_time_delta();
-    }
-
-    public function send_message($message, $dc_number = -1)
-    {
-        if ($dc_number == -1) {
-            $dc_number = $this->curdc;
-        }
-
-        return $this->sockets[$dc_number]->send_message($message);
-    }
-
-    public function read_message($dc_number = -1)
-    {
-        if ($dc_number == -1) {
-            $dc_number = $this->curdc;
-        }
-
-        return $this->sockets[$dc_number]->read_message();
+        return $this->sockets[$this->curdc]->{$name}(...$arguments);
     }
 
     public function __destroy()
     {
+        $this->unset_curdc();
         foreach ($this->sockets as $n => $socket) {
             unset($this->sockets[$n]);
         }

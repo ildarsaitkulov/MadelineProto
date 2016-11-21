@@ -6,7 +6,7 @@ This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 The PWRTelegram API is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU Affero General Public License for more details.
-You should have received a copy of the GNU General Public License along with the MadelineProto.
+You should have received a copy of the GNU General Public License along with MadelineProto.
 If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -18,8 +18,14 @@ namespace danog\MadelineProto;
 class Connection extends Tools
 {
     public $sock = null;
+
     public $protocol = null;
-    private $_delta = 0;
+
+    public $time_delta = 0;
+    public $temp_auth_key;
+    public $auth_key;
+    public $session_id;
+    public $seq_no = 0;
 
     public function __construct($ip, $port, $protocol = 'tcp_full')
     {
@@ -33,6 +39,8 @@ class Connection extends Tools
         - udp
         */
         $this->protocol = $protocol;
+        $this->ip = $ip;
+        $this->port = $port;
         switch ($this->protocol) {
             case 'tcp_abridged':
                 $this->sock = fsockopen('tcp://'.$ip.':'.$port);
@@ -59,6 +67,10 @@ class Connection extends Tools
                 $this->out_seq_no = -1;
                 $this->in_seq_no = -1;
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
             default:
                 throw new Exception('Connection: invalid protocol specified.');
                 break;
@@ -73,20 +85,20 @@ class Connection extends Tools
             case 'tcp_full':
                 fclose($this->sock);
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
             default:
                 throw new Exception('Connection: invalid protocol specified.');
                 break;
         }
     }
 
-    public function set_time_delta($delta)
+    public function close_and_reopen()
     {
-        $this->_delta = $delta;
-    }
-
-    public function get_time_delta()
-    {
-        return $this->_delta;
+        $this->__destruct();
+        $this->__construct($this->ip, $this->port, $this->protocol);
     }
 
     /**
@@ -114,6 +126,10 @@ class Connection extends Tools
 
                 return fwrite($this->sock, $what);
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
             default:
                 throw new Exception('Connection: invalid protocol specified.');
                 break;
@@ -132,6 +148,10 @@ class Connection extends Tools
 
                 return fread($this->sock, $length);
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
             default:
                 throw new Exception('Connection: invalid protocol specified.');
                 break;
@@ -148,7 +168,7 @@ class Connection extends Tools
                 }
                 $packet_length = \danog\PHP\Struct::unpack('<I', $packet_length_data)[0];
                 $packet = $this->read($packet_length - 4);
-                if (!($this->newcrc32($packet_length_data.substr($packet, 0, -4)) == \danog\PHP\Struct::unpack('<I', substr($packet, -4))[0])) {
+                if ($this->newcrc32($packet_length_data.substr($packet, 0, -4)) != \danog\PHP\Struct::unpack('<I', substr($packet, -4))[0]) {
                     throw new Exception('CRC32 was not correct!');
                 }
                 $this->in_seq_no++;
@@ -182,6 +202,10 @@ class Connection extends Tools
                 $packet = $this->sock->read($packet_length);
                 $payload = $this->fopen_and_write('php://memory', 'rw+b', $packet);
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
         }
 
         return $payload;
@@ -197,8 +221,7 @@ class Connection extends Tools
                 $this->write($step2);
                 break;
             case 'tcp_intermediate':
-                $step1 = \danog\PHP\Struct::pack('<I', strlen($message)).$message;
-                $this->write($step1);
+                $this->write(\danog\PHP\Struct::pack('<I', strlen($message)).$message);
                 break;
             case 'tcp_abridged':
                 $len = strlen($message) / 4;
@@ -209,6 +232,10 @@ class Connection extends Tools
                 }
                 $this->write($step1);
                 break;
+            case 'http':
+            case 'https':
+            case 'udp':
+                throw new Exception("Connection: This protocol wasn't implemented yet.");
             default:
                 break;
         }

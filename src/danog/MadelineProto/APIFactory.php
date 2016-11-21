@@ -10,19 +10,21 @@ You should have received a copy of the GNU General Public License along with Mad
 If not, see <http://www.gnu.org/licenses/>.
 */
 
-namespace danog\MadelineProto\MTProtoTools;
+namespace danog\MadelineProto;
 
-/**
- * Manages sequence number.
- */
-class SeqNoHandler extends SaltHandler
+class APIFactory
 {
-    public function generate_seq_no($content_related = true)
-    {
-        $in = $content_related ? 1 : 0;
-        $value = $this->datacenter->seq_no;
-        $this->datacenter->seq_no += $in;
+    public $namespace;
+    public $API;
 
-        return ($value * 2) + $in;
+    public function __construct($namespace, $API)
+    {
+        $this->namespace = $namespace.'.';
+        $this->API = $API;
+    }
+
+    public function __call($name, $arguments)
+    {
+        return $this->API->method_call($this->namespace.$name, $arguments[0]);
     }
 }
