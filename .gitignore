@@ -1,6 +1,16 @@
+_site
+
 # JetBrains IDE
 .idea/
 *.iml
+
+# Eclipse
+.buildpath
+.project
+.settings
+
+# VI
+*.swp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -61,6 +71,19 @@ target/
 .#*#
 *.swp
 vendor
-*save
 *bak
-number.php
+token.php
+*~uploading*
+session.mad
+*.madeline
+enc.tar.xz
+a
+web_data.php
+web_API.log
+db_connect.php
+sessions
+docs_md
+
+.env
+composer.lock
+b.php

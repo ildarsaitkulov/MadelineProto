@@ -1,6 +1,6 @@
 <?php
 /*
-Copyright 2016 Daniil Gentili
+Copyright 2016-2017 Daniil Gentili
 (https://daniil.it)
 This file is part of MadelineProto.
 MadelineProto is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -12,51 +12,46 @@ If not, see <http://www.gnu.org/licenses/>.
 
 namespace danog\MadelineProto;
 
-class RSA extends TL\TL
+class RSA
 {
-    public $n; // phpseclib\Math\BigInteger class
-    public $e; // phpseclib\Math\BigInteger class
-    public $fp; // phpseclib\Math\BigInteger class
-    public $fp_bytes; // bytes
+    use \danog\MadelineProto\TL\TL;
+    use \danog\MadelineProto\Tools;
+
+    public $keydata = [];
 
     public function __construct($rsa_key)
     {
-        \danog\MadelineProto\Logger::log('Istantiating \phpseclib\Crypt\RSA...');
+        \danog\MadelineProto\Logger::log(['Istantiating \phpseclib\Crypt\RSA...'], Logger::ULTRA_VERBOSE);
         $key = new \phpseclib\Crypt\RSA();
 
-        \danog\MadelineProto\Logger::log('Loading key...');
-        $key->loadKey($rsa_key);
-        $this->n = $key->modulus;
-        $this->e = $key->exponent;
-        unset($key);
+        \danog\MadelineProto\Logger::log(['Loading key...'], Logger::ULTRA_VERBOSE);
+        $key->load($rsa_key);
+        $this->keydata = ['n' => \phpseclib\Common\Functions\Objects::getVar($key, 'modulus'), 'e' => \phpseclib\Common\Functions\Objects::getVar($key, 'exponent')];
 
-        \danog\MadelineProto\Logger::log('Computing fingerprint...');
-        $this->fp_bytes = substr(
+        \danog\MadelineProto\Logger::log(['Computing fingerprint...'], Logger::ULTRA_VERBOSE);
+        $this->keydata['fp'] = \danog\PHP\Struct::unpack('<q', substr(
             sha1(
-                $this->serialize_param(
-                    'bytes',
-                    null,
-                    $this->n->toBytes()
+                $this->serialize_object(
+                    ['type' => 'bytes'],
+                    $this->keydata['n']->toBytes()
                 )
                 .
-                $this->serialize_param(
-                    'bytes',
-                    null,
-                    $this->e->toBytes()
+                $this->serialize_object(
+                    ['type' => 'bytes'],
+                    $this->keydata['e']->toBytes()
                 ),
                 true
             ),
             -8
-        );
+        ))[0];
 
-        \danog\MadelineProto\Logger::log('Generating BigInteger object for fingerprint...');
-        $this->fp = new \phpseclib\Math\BigInteger(strrev($this->fp_bytes), -256);
+        return $this->keydata;
     }
 
     public function encrypt($data)
     {
-        $bigintdata = new \phpseclib\Math\BigInteger($data, 256);
+        \danog\MadelineProto\Logger::log(['Encrypting with rsa key...'], Logger::VERBOSE);
 
-        return $bigintdata->powMod($this->e, $this->n)->toBytes();
+        return (new \phpseclib\Math\BigInteger($data, 256))->powMod($this->keydata['e'], $this->keydata['n'])->toBytes();
     }
 }
